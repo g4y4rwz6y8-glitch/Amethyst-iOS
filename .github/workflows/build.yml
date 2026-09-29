@@ -28,7 +28,9 @@ jobs:
 
       - name: Register JDK 8 with macOS java_home
         run: |
+          echo "Registering JDK 8 ($JAVA_HOME) with /usr/libexec/java_home..."
           sudo mkdir -p /Library/Java/JavaVirtualMachines
+
           BUNDLE_DIR=$(find "$(cd "$JAVA_HOME/../.." && pwd)" -maxdepth 2 -name "*.jdk" -type d 2>/dev/null | head -n 1)
 
           if [ -n "$BUNDLE_DIR" ] && [ -f "$BUNDLE_DIR/Contents/Info.plist" ]; then
@@ -58,21 +60,26 @@ jobs:
           </plist>
           EOF
           fi
+
           echo "BOOTJDK=${JAVA_HOME}/bin" >> $GITHUB_ENV
 
       - name: Install Build Dependencies
         run: |
           brew install cmake ninja ldid dpkg
 
-      - name: Compile Native Libraries & App
+      - name: Compile MobileGlues & Native Libraries
         run: |
-          make -j$(sysctl -n hw.ncpu) BOOTJDK="${JAVA_HOME}/bin"
+          make -j$(sysctl -n hw.ncpu) \
+            BOOTJDK="${JAVA_HOME}/bin" \
+            CFLAGS="-Wno-error=implicit-function-declaration" \
+            OBJCFLAGS="-Wno-error=implicit-function-declaration"
 
       - name: Package IPA with Extended Memory Limit
         run: |
           mkdir -p build/Payload
           cp -r build/Amethyst.app build/Payload/
           
+          # Inject Extended Memory Limit entitlement
           cat << 'EOF' > entitlements.plist
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
