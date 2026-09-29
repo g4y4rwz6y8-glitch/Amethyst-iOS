@@ -276,3 +276,17 @@ JITFlags DeviceGetJITFlags(BOOL refresh) {
 BOOL DeviceHasJITFlags(JITFlags flags) {
     return (DeviceGetJITFlags(NO) & flags) == flags;
 }
+#include <dlfcn.h>
+
+// Dynamic fallback implementation to satisfy the linker for Xcode 15+ SDKs
+BOOL _UISolariumEnabled(void) {
+    typedef BOOL (*SolariumFunc)(void);
+    static SolariumFunc pfn = (SolariumFunc)-1;
+    if (pfn == (SolariumFunc)-1) {
+        pfn = (SolariumFunc)dlsym(RTLD_NEXT, "_UISolariumEnabled");
+    }
+    if (pfn) {
+        return pfn();
+    }
+    return NO;
+}
