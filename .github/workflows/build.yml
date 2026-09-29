@@ -1,0 +1,64 @@
+name: Build Amethyst-iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Set up Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '15.4'
+
+      - name: Install Build Dependencies
+        run: |
+          brew install cmake ninja ldid dpkg
+
+      - name: Compile MobileGlues & Native Libraries
+        run: |
+          make dep_mg
+          make -j$(sysctl -n hw.ncpu)
+
+      - name: Package IPA with Extended Memory Limit
+        run: |
+          mkdir -p build/Payload
+          cp -r build/Amethyst.app build/Payload/
+          
+          # Inject Extended Memory Limit entitlement
+          cat << 'EOF' > entitlements.plist
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>com.apple.developer.kernel.extended-virtual-addressing</key>
+              <true/>
+              <key>com.apple.developer.kernel.increased-memory-limit</key>
+              <true/>
+              <key>get-task-allow</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+          
+          ldid -Sentitlements.plist build/Payload/Amethyst.app
+          
+          cd build
+          zip -r9 Amethyst-Pitched.ipa Payload
+          cd ..
+
+      - name: Upload IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Amethyst-iOS-Patched
+          path: build/Amethyst-Pitched.ipa
+          retention-days: 7
